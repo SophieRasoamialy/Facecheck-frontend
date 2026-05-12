@@ -175,7 +175,7 @@ export default function ListEtudiant() {
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
                       <Image
-                        src={etudiant.photo_etudiant || "/vercel.svg"}
+                        src={etudiant.photo_etudiant || "/images/visaaa.jpg"}
                         alt={`${etudiant.nom_etudiant} ${etudiant.prenom_etudiant}`}
                         width={44}
                         height={44}
