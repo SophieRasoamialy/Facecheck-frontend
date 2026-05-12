@@ -116,7 +116,7 @@ export default function Home() {
             className="bg-white p-6 rounded-xl shadow-md"
           >
             <h3 className="text-xl font-semibold mb-3">Presence et suivi</h3>
-            <p className="text-gray-600">Pointage entree/sortie, suivi de presence par cours et visualisation des absences et de l'assiduite.</p>
+            <p className="text-gray-600">Pointage entree/sortie, suivi de presence par cours et visualisation des absences et de l&apos;assiduite.</p>
           </motion.div>
         </div>
       </div>
