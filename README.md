@@ -164,6 +164,8 @@ npm run lint
 7. Tester les CRUD du portail admin
 8. Tester le pointage étudiant
 
+🔗 **Tester l'application**: https://ipresencia.vercel.app/
+
 ## Comptes de test
 
 Si les seeders backend ont été exécutés, tu peux utiliser :
