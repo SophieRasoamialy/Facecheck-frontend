@@ -8,6 +8,32 @@ Cette interface permet :
 - la gestion académique côté admin
 - le suivi d'assiduité et le pointage côté étudiant
 
+## Captures d'écran
+
+## Page d'accueil
+
+![Page d'accueil](./public/screenshots/home.png)
+
+## Gestion des emplois du temps
+
+![Gestion des emplois du temps](./public/screenshots/admin-edt.png)
+
+## Gestion des étudiants
+
+![Gestion des étudiants](./public/screenshots/admin-students.png)
+
+## Connexion étudiant
+
+![Connexion étudiant](./public/screenshots/student-login.png)
+
+## Dashboard étudiant
+
+![Dashboard étudiant](./public/screenshots/student-dashboard.png)
+
+## Pointage étudiant
+
+![Pointage étudiant](./public/screenshots/student-pointage-modal.png)
+
 ## Stack technique
 
 - Next.js 14
@@ -126,32 +152,6 @@ npm run lint
 - consultation des cours non suivis
 - consultation de l'emploi du temps hebdomadaire
 - pointage d'entrée et de sortie
-
-## Captures d'écran
-
-## Page d'accueil
-
-![Page d'accueil](./public/screenshots/home.png)
-
-## Gestion des emplois du temps
-
-![Gestion des emplois du temps](./public/screenshots/admin-edt.png)
-
-## Gestion des étudiants
-
-![Gestion des étudiants](./public/screenshots/admin-students.png)
-
-## Connexion étudiant
-
-![Connexion étudiant](./public/screenshots/student-login.png)
-
-## Dashboard étudiant
-
-![Dashboard étudiant](./public/screenshots/student-dashboard.png)
-
-## Pointage étudiant
-
-![Pointage étudiant](./public/screenshots/student-pointage-modal.png)
 
 ## Parcours de test conseillé
 
