@@ -1,186 +1,195 @@
-'use client';
-import React, { useState, useEffect } from 'react';
-import axios from 'axios';
-import Swal from 'sweetalert2';
+"use client";
+
+import { useEffect, useState } from "react";
+import Swal from "sweetalert2";
+
+import ModalShell from "@/components/ui/ModalShell";
+import s3 from "@/aws-config";
+import {
+  getEtudiant,
+  getNiveaux,
+  unwrapError,
+  updateEtudiant,
+} from "@/lib/api";
+import type { Niveau } from "@/lib/types";
+
 interface ModalProps {
-    isOpen: boolean;
-    onClose: () => void;
-    id_etudiant:number;
+  isOpen: boolean;
+  onClose: () => void;
+  id_etudiant: number;
+  onSaved: () => void;
+}
+
+async function uploadStudentPhoto(studentPhoto: File | null) {
+  if (!studentPhoto) {
+    return undefined;
   }
-  
-  interface Niveau {
-    id_niveau: number;
-    niveau: string;
-  }
 
+  const uploadResult = await s3
+    .upload({
+      Bucket: process.env.NEXT_PUBLIC_S3_BUCKET_NAME!,
+      Key: `students/${Date.now()}_${studentPhoto.name}`,
+      Body: studentPhoto,
+      ContentType: studentPhoto.type,
+    })
+    .promise();
 
-  const EditModal: React.FC<ModalProps> = ({ isOpen, onClose, id_etudiant }) => {
-    const [firstName, setFirstName] = useState('');
-    const [lastName, setLastName] = useState('');
-    const [niveaux, setNiveaux] = useState<Niveau[]>([]);
-    const [selectedNiveau, setSelectedNiveau] = useState('none');
-    const [studentPhoto, setStudentPhoto] = useState<File | null>(null);
+  return uploadResult.Location;
+}
 
-    
-    // Fonction pour envoyer les données au backend
-  const handleEnregistrer = async () => {
-    try {
-     /* const formData = new FormData();
-      formData.append('nom_etudiant', firstName);
-      formData.append('prenom_etudiant', lastName);
-      formData.append('id_niveau', selectedNiveau);*/
+export default function EditModal({
+  isOpen,
+  onClose,
+  id_etudiant,
+  onSaved,
+}: ModalProps) {
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [selectedNiveau, setSelectedNiveau] = useState("");
+  const [niveaux, setNiveaux] = useState<Niveau[]>([]);
+  const [studentPhoto, setStudentPhoto] = useState<File | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
 
-      let  fileName = ''
-      if (studentPhoto) { 
-
-         fileName = `images/${studentPhoto.name}`;
-       // formData.append('photo_etudiant', fileName);
-        
+  useEffect(() => {
+    async function loadForm() {
+      if (!isOpen || !id_etudiant) {
+        return;
       }
-    const response = await axios.put(`${process.env.NEXT_PUBLIC_BACK_URL}/api/etudiants/${id_etudiant}`, 
-    {
-      nom_etudiant : firstName,
-      prenom_etudiant: lastName,
-      id_niveau  : selectedNiveau,
-      photo_etudiant: fileName,
-    });
 
-
-      if (response.status === 200) {
-        // Gérer la réponse si nécessaire
-        Swal.fire('Succès', 'Données enregistrées avec succès', 'success');
-        onClose();
-      } else {
-        Swal.fire('Erreur', 'Erreur lors de l\'enregistrement des données', 'error');
-        
-      }
-    } catch (error) {
-      console.error('Erreur lors de la requête:', error);
-    }
-  };
-    
-    useEffect(() => {
-      fetchNiveaux();
-      fetchEtudiants();
-    }, []);
-
-    async function fetchEtudiants() {
-      console.log(id_etudiant);
-      if(id_etudiant !== 0){
-          try {
-              const response = await axios.get(`${process.env.NEXT_PUBLIC_BACK_URL}/api/etudiants/${id_etudiant}`);
-        
-              if (response.status === 200) {
-                const data = response.data;
-                console.log("data");
-                console.log(data);
-                setFirstName(data.nom_etudiant);
-                setLastName(data.prenom_etudiant);
-                setSelectedNiveau(data.id_niveau); 
-              }
-            } catch (error) {
-              console.error('Erreur lors de la récupération des matières:', error);
-            }
-      }
-    }
-  
-    const fetchNiveaux = async () => {
       try {
-        const response = await axios.get(`${process.env.NEXT_PUBLIC_BACK_URL}/api/niveaux`);
-        console.log("Niveaux reçus :", response.data);
-        setNiveaux(response.data);
-        
+        setLoading(true);
+        const [loadedNiveaux, etudiant] = await Promise.all([
+          getNiveaux(),
+          getEtudiant(id_etudiant),
+        ]);
+        setNiveaux(loadedNiveaux);
+        setFirstName(etudiant.nom_etudiant);
+        setLastName(etudiant.prenom_etudiant);
+        setEmail(etudiant.email ?? "");
+        setSelectedNiveau(String(etudiant.id_niveau));
       } catch (error) {
-        console.error('Erreur lors de la récupération des niveaux', error);
+        Swal.fire("Erreur", unwrapError(error, "Chargement impossible"), "error");
+      } finally {
+        setLoading(false);
       }
-    };
+    }
 
-    const handleFirstNameChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-      setFirstName(event.target.value);
-    };
-  
-    const handleLastNameChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-      setLastName(event.target.value);
-    };
+    void loadForm();
+  }, [id_etudiant, isOpen]);
 
-    const handleNiveauChange = async (event: { target: { value: any; }; }) => {
-      setSelectedNiveau(event.target.value);
-    };
-    if (!isOpen) return null;
-  
-    return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-      <div className="bg-white rounded-lg p-6 w-full max-w-md sm:max-w-lg md:max-w-xl">
-          <h3 className="text-2xl font-bold mb-4">Nouveau Etudiant</h3>
-           <div>
-           <form className=" rounded-lg ">
-            <div className="mb-4">
-              <label htmlFor="firstName" className="block text-sm font-medium text-gray-900">
-                First Name
-              </label>
-              <input
-                type="text"
-                id="firstName"
-                name="firstName"
-                value={firstName}
-                onChange={handleFirstNameChange}
-                className="block w-full p-2 border border-gray-300 rounded-lg"
-                placeholder="Enter first name"
-              />
-            </div>
-            <div className="mb-4">
-              <label htmlFor="lastName" className="block text-sm font-medium text-gray-900">
-                Last Name
-              </label>
-              <input
-                type="text"
-                id="lastName"
-                name="lastName"
-                value={lastName}
-                onChange={handleLastNameChange}
-                className="block w-full p-2 border border-gray-300 rounded-lg"
-                placeholder="Enter last name"
-              />
-            </div>
-            <div className="mb-4">
-            <label htmlFor="studentPhoto" className="block text-sm font-medium text-gray-900">
-              Student Photo
-            </label>
+  async function handleSave() {
+    try {
+      setSaving(true);
+      const photoUrl = await uploadStudentPhoto(studentPhoto);
+      await updateEtudiant(id_etudiant, {
+        nom_etudiant: firstName.trim(),
+        prenom_etudiant: lastName.trim(),
+        email: email.trim(),
+        id_niveau: Number(selectedNiveau),
+        ...(password ? { password } : {}),
+        ...(photoUrl ? { photo_etudiant: photoUrl } : {}),
+      });
+      await Swal.fire("Succes", "Etudiant mis a jour", "success");
+      onSaved();
+      onClose();
+    } catch (error) {
+      Swal.fire("Erreur", unwrapError(error, "Mise a jour impossible"), "error");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <ModalShell
+      isOpen={isOpen}
+      title="Modifier etudiant"
+      footer={
+        <>
+          <button
+            onClick={onClose}
+            className="rounded-2xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white"
+          >
+            Fermer
+          </button>
+          <button
+            onClick={() => void handleSave()}
+            disabled={loading || saving || !firstName.trim() || !lastName.trim() || !email.trim() || !selectedNiveau}
+            className="rounded-2xl bg-teal-600 px-5 py-3 text-sm font-semibold text-white disabled:opacity-50"
+          >
+            {saving ? "Enregistrement..." : "Mettre a jour"}
+          </button>
+        </>
+      }
+    >
+      {loading ? (
+        <p className="text-sm text-slate-500">Chargement...</p>
+      ) : (
+        <div className="grid gap-4">
+          <label className="grid gap-2 text-sm font-medium text-slate-700">
+            Nom
+            <input
+              type="text"
+              value={firstName}
+              onChange={(event) => setFirstName(event.target.value)}
+              className="rounded-2xl border border-slate-200 px-4 py-3 outline-none focus:border-teal-500"
+            />
+          </label>
+          <label className="grid gap-2 text-sm font-medium text-slate-700">
+            Prenom
+            <input
+              type="text"
+              value={lastName}
+              onChange={(event) => setLastName(event.target.value)}
+              className="rounded-2xl border border-slate-200 px-4 py-3 outline-none focus:border-teal-500"
+            />
+          </label>
+          <label className="grid gap-2 text-sm font-medium text-slate-700">
+            Email
+            <input
+              type="email"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              className="rounded-2xl border border-slate-200 px-4 py-3 outline-none focus:border-teal-500"
+            />
+          </label>
+          <label className="grid gap-2 text-sm font-medium text-slate-700">
+            Nouveau mot de passe
+            <input
+              type="password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              className="rounded-2xl border border-slate-200 px-4 py-3 outline-none focus:border-teal-500"
+              placeholder="Laisser vide pour conserver l'ancien"
+            />
+          </label>
+          <label className="grid gap-2 text-sm font-medium text-slate-700">
+            Nouvelle photo
             <input
               type="file"
-              id="studentPhoto"
-              name="studentPhoto"
-              onChange={(e) => setStudentPhoto(e.target.files?.[0] || null)}
-              className="block w-full p-2 border border-gray-300 rounded-lg"
+              onChange={(event) => setStudentPhoto(event.target.files?.[0] ?? null)}
+              className="rounded-2xl border border-slate-200 px-4 py-3 outline-none focus:border-teal-500"
             />
-          </div>
-            <div className='mb-4' >
-              <select
-              id="niveaux"
-              className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5"
-              onChange={handleNiveauChange}
+          </label>
+          <label className="grid gap-2 text-sm font-medium text-slate-700">
+            Niveau
+            <select
               value={selectedNiveau}
+              onChange={(event) => setSelectedNiveau(event.target.value)}
+              className="rounded-2xl border border-slate-200 px-4 py-3 outline-none focus:border-teal-500"
             >
-              <option value="none">Choisir un niveau</option>
-              {niveaux.map((niveau, index) => (
+              <option value="">Choisir un niveau</option>
+              {niveaux.map((niveau) => (
                 <option key={niveau.id_niveau} value={niveau.id_niveau}>
                   {niveau.niveau}
                 </option>
               ))}
-          </select>
-            </div>
-          </form>
-          </div>
-          <div className='flex gap-4 mt-4'>
-            <button onClick={onClose} className="font-medium text-sm bg-red-500 text-white px-4 py-2 rounded-lg">
-              Close
-            </button>
-            <button onClick={handleEnregistrer} type="button" className=" flex text-gray-900 bg-gradient-to-r from-teal-300 to-lime-300 hover:bg-gradient-to-l hover:from-teal-200 hover:to-lime-300 focus:ring-4 focus:outline-none focus:ring-lime-300 font-medium rounded-lg text-sm px-4 py-2 float-right">
-                Enregistrer
-            </button>
-          </div>
+            </select>
+          </label>
         </div>
-      </div>
-    );
-  };
-export default EditModal;
+      )}
+    </ModalShell>
+  );
+}

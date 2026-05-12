@@ -1,49 +1,61 @@
-'use client';
-import React from 'react';
-import { Tab, TabList, TabPanel, Tabs } from 'react-tabs';
-import 'react-tabs/style/react-tabs.css';
-import EdtPage from '../edt/page';
-import DashboardPage from '../dashboard/page';
+"use client";
 
-// Interface pour les paramètres
-interface EtudiantPageProps {
-  params: {
-    id: string;
-  };
-}
+import { useRouter } from "next/navigation";
+import { Tab, TabList, TabPanel, Tabs } from "react-tabs";
+import "react-tabs/style/react-tabs.css";
 
-// Composant fonctionnel avec les paramètres déstructurés
-const EtudiantPage: React.FC<EtudiantPageProps> = ({ params }) => {
-  const { id } = params;
+import DashboardPage from "../dashboard/page";
+import EdtPage from "../edt/page";
+import { clearSession } from "@/lib/session";
+
+export default function EtudiantPage() {
+  const router = useRouter();
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-teal-50 to-white p-5">
-      <div className="container mx-auto">
-        <h2 className="text-center text-3xl font-bold text-teal-600 mb-5">Espace Étudiant</h2>
-        <Tabs>
-          <TabList className="flex justify-center mb-5">
-            <Tab className="px-4 py-2 text-teal-600 font-semibold border-b-2 border-teal-600 hover:bg-teal-100 rounded-t-lg">
-              Dashboard
-            </Tab>
-            <Tab className="px-4 py-2 text-teal-600 font-semibold border-b-2 border-teal-600 hover:bg-teal-100 rounded-t-lg">
-              Emploi du temps
-            </Tab>
-          </TabList>
+    <div className="min-h-screen bg-gradient-to-br from-teal-50 via-white to-lime-50 p-4 sm:p-6">
+      <div className="mx-auto max-w-6xl">
+        <div className="rounded-[2rem] bg-white/90 p-4 shadow-xl backdrop-blur sm:p-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <h1 className="text-center text-3xl font-bold text-teal-700">
+              Espace etudiant
+            </h1>
+            <button
+              onClick={() => {
+                clearSession("student");
+                router.push("/etudiant/login");
+              }}
+              className="rounded-2xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+            >
+              Se deconnecter
+            </button>
+          </div>
 
-          <TabPanel>
-            <div className="bg-white bg-opacity-90 rounded-2xl shadow-lg p-5">
+          <Tabs className="mt-6">
+            <TabList className="flex flex-wrap justify-center gap-3">
+              <Tab
+                className="cursor-pointer rounded-2xl border border-teal-200 px-5 py-3 text-sm font-semibold text-teal-700 transition hover:bg-teal-50"
+                selectedClassName="!rounded-2xl !border-teal-600 !bg-teal-600 !text-white"
+              >
+                Dashboard
+              </Tab>
+
+              <Tab
+                className="cursor-pointer rounded-2xl border border-teal-200 px-5 py-3 text-sm font-semibold text-teal-700 transition hover:bg-teal-50"
+                selectedClassName="!rounded-2xl !border-teal-600 !bg-teal-600 !text-white"
+              >
+                Emploi du temps
+              </Tab>
+            </TabList>
+
+            <TabPanel className="mt-6">
               <DashboardPage />
-            </div>
-          </TabPanel>
-          <TabPanel>
-            <div className="bg-white bg-opacity-90 rounded-2xl shadow-lg p-5">
+            </TabPanel>
+            <TabPanel className="mt-6">
               <EdtPage />
-            </div>
-          </TabPanel>
-        </Tabs>
+            </TabPanel>
+          </Tabs>
+        </div>
       </div>
     </div>
   );
-};
-
-export default EtudiantPage;
+}

@@ -1,141 +1,113 @@
 "use client";
-import React, { useState, useEffect } from "react";
-import axios from "axios";
+
+import { useEffect, useState } from "react";
 import Swal from "sweetalert2";
+
+import ModalShell from "@/components/ui/ModalShell";
+import { getEnseignant, unwrapError, updateEnseignant } from "@/lib/api";
+
 interface ModalProps {
   isOpen: boolean;
   onClose: () => void;
   id_enseignant: number;
+  onSaved: () => void;
 }
 
-const EditModal: React.FC<ModalProps> = ({
+export default function EditModal({
   isOpen,
   onClose,
   id_enseignant,
-}) => {
+  onSaved,
+}: ModalProps) {
   const [nomProf, setNomProf] = useState("");
   const [prenomProf, setPrenomProf] = useState("");
-
-  const handleEnregistrer = async () => {
-    try {
-      // Envoi des données vers l'API pour créer un nouvel enseignant
-      const response = await axios.put(
-        `${process.env.NEXT_PUBLIC_BACK_URL}/api/enseignants/${id_enseignant}`,
-        {
-          nom_enseignant: nomProf,
-          prenom_enseignant: prenomProf,
-        }
-      );
-
-      if (response.status === 200) {
-        setNomProf("");
-        setPrenomProf("");
-        Swal.fire("Succès", "Données enregistrées avec succès", "success");
-        onClose();
-      } else {
-        Swal.fire(
-          "Erreur",
-          "Erreur lors de l'enregistrement des données",
-          "error"
-        );
-      }
-    } catch (error) {
-      console.error("Erreur lors de la création du nouvel enseignant:", error);
-      // Gérer les erreurs ici (par exemple, afficher un message à l'utilisateur)
-    }
-  };
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    fetchEnseignants();
-  }, []);
+    async function loadTeacher() {
+      if (!isOpen || !id_enseignant) {
+        return;
+      }
 
-  async function fetchEnseignants() {
-    if (id_enseignant !== 0) {
       try {
-        const response = await axios.get(
-          `${process.env.NEXT_PUBLIC_BACK_URL}/api/enseignants/${id_enseignant}`
-        );
-
-        if (response.status === 200) {
-          const data = response.data;
-          console.log("data");
-          console.log(data);
-          setNomProf(data.nom_enseignant);
-          setPrenomProf(data.prenom_enseignant);
-        }
+        setLoading(true);
+        const enseignant = await getEnseignant(id_enseignant);
+        setNomProf(enseignant.nom_enseignant);
+        setPrenomProf(enseignant.prenom_enseignant);
       } catch (error) {
-        console.error("Erreur lors de la récupération des matières:", error);
+        Swal.fire("Erreur", unwrapError(error, "Chargement impossible"), "error");
+      } finally {
+        setLoading(false);
       }
     }
-  }
-  const handlematiereChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    setNomProf(event.target.value);
-  };
 
-  const handleprofChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    setPrenomProf(event.target.value);
-  };
-  if (!isOpen) return null;
+    void loadTeacher();
+  }, [id_enseignant, isOpen]);
+
+  async function handleSave() {
+    try {
+      setSaving(true);
+      await updateEnseignant(id_enseignant, {
+        nom_enseignant: nomProf.trim(),
+        prenom_enseignant: prenomProf.trim(),
+      });
+      await Swal.fire("Succes", "Enseignant mis a jour", "success");
+      onSaved();
+      onClose();
+    } catch (error) {
+      Swal.fire("Erreur", unwrapError(error, "Mise a jour impossible"), "error");
+    } finally {
+      setSaving(false);
+    }
+  }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-      <div className="bg-white rounded-lg p-6 w-full max-w-md sm:max-w-lg md:max-w-xl">
-        <h3 className="text-2xl font-bold mb-4">Modification de enseignant</h3>
-        <div>
-          <form className=" rounded-lg ">
-            <div className="mb-4">
-              <label
-                htmlFor="matiere"
-                className="block text-sm font-medium text-gray-900"
-              >
-                Nom
-              </label>
-              <input
-                type="text"
-                id="matiere"
-                name="matiere"
-                value={nomProf}
-                onChange={handlematiereChange}
-                className="block w-full p-2 border border-gray-300 rounded-lg"
-                placeholder="Ex. Laurant"
-              />
-            </div>
-            <div className="mb-4">
-              <label
-                htmlFor="prof"
-                className="block text-sm font-medium text-gray-900"
-              >
-                Prenom
-              </label>
-              <input
-                type="text"
-                id="prof"
-                name="prof"
-                value={prenomProf}
-                onChange={handleprofChange}
-                className="block w-full p-2 border border-gray-300 rounded-lg"
-                placeholder="Ex. Dupont"
-              />
-            </div>
-          </form>
-        </div>
-        <div className="flex gap-2 mt-4 ">
+    <ModalShell
+      isOpen={isOpen}
+      title="Modifier enseignant"
+      footer={
+        <>
           <button
             onClick={onClose}
-            className=" inline-block px-8 py-4 bg-gradient-to-r from-gray-800 to-gray-900 text-white rounded-lg shadow-lg hover:bg-gray-700 transition-all duration-300"
+            className="rounded-2xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white"
           >
-            Close
+            Fermer
           </button>
           <button
-            onClick={handleEnregistrer}
-            type="button"
-            className=" inline-block px-8 py-4 bg-gradient-to-r from-teal-300 to-lime-300 text-black rounded-lg shadow-lg hover:bg-gradient-to-l hover:from-teal-400 hover:to-lime-400 transition-all duration-300"
+            onClick={() => void handleSave()}
+            disabled={loading || saving || !nomProf.trim() || !prenomProf.trim()}
+            className="rounded-2xl bg-teal-600 px-5 py-3 text-sm font-semibold text-white disabled:opacity-50"
           >
-            Mettre a jour
+            {saving ? "Enregistrement..." : "Mettre a jour"}
           </button>
+        </>
+      }
+    >
+      {loading ? (
+        <p className="text-sm text-slate-500">Chargement...</p>
+      ) : (
+        <div className="grid gap-4">
+          <label className="grid gap-2 text-sm font-medium text-slate-700">
+            Nom
+            <input
+              type="text"
+              value={nomProf}
+              onChange={(event) => setNomProf(event.target.value)}
+              className="rounded-2xl border border-slate-200 px-4 py-3 outline-none focus:border-teal-500"
+            />
+          </label>
+          <label className="grid gap-2 text-sm font-medium text-slate-700">
+            Prenom
+            <input
+              type="text"
+              value={prenomProf}
+              onChange={(event) => setPrenomProf(event.target.value)}
+              className="rounded-2xl border border-slate-200 px-4 py-3 outline-none focus:border-teal-500"
+            />
+          </label>
         </div>
-      </div>
-    </div>
+      )}
+    </ModalShell>
   );
-};
-export default EditModal;
+}

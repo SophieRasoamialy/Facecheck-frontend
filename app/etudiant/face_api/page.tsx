@@ -1,10 +1,8 @@
 'use client';
 import React, { useState, useCallback, useRef } from 'react';
 import { NextPage } from 'next';
-import dynamic from 'next/dynamic';
 import Webcam from 'react-webcam';
 import * as faceapi from 'face-api.js';
-import img1 from "../../../public/images/visa.png";
 
 const Compare: NextPage = () => {
   const [error, setError] = useState<string | null>(null);

@@ -1,432 +1,252 @@
 "use client";
-import React, { useState, useEffect } from "react";
+
+import { useEffect, useMemo, useState } from "react";
 import {
   ChevronLeftIcon,
   ChevronRightIcon,
-  PlusIcon,
   PencilIcon,
-  XIcon,
+  PlusIcon,
+  TrashIcon,
 } from "@heroicons/react/solid";
+import { addDays, endOfWeek, format, startOfWeek } from "date-fns";
+import Swal from "sweetalert2";
+
 import AjoutModal from "./modal/ajoutModal";
 import EditModal from "./modal/editModal";
-import axios from "axios";
-import Swal from "sweetalert2";
-import { startOfWeek, endOfWeek, addDays } from "date-fns";
-
-interface Edt {
-  id_edt: number;
-  date: string; // or Date if you are storing it as a Date object
-  matiere: string;
-  nom_enseignant: string;
-  prenom_enseignant: string;
-  num_salle: string;
-  heure: string;
-}
-
-interface Niveau {
-  id_niveau: number;
-  niveau: string;
-}
+import {
+  deleteTimetableEntry,
+  getNiveaux,
+  getTimetableByNiveau,
+  unwrapError,
+} from "@/lib/api";
+import { toApiDate } from "@/lib/date";
+import type { Niveau, StudentCourse } from "@/lib/types";
 
 export default function EdtPage() {
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [niveaux, setNiveaux] = useState<Niveau[]>([]);
-  const [selectedNiveau, setSelectedNiveau] = useState("none");
-  const [edts, setEdts] = useState<Edt[]>([]);
+  const [selectedNiveau, setSelectedNiveau] = useState("");
+  const [edts, setEdts] = useState<StudentCourse[]>([]);
+  const [currentDate, setCurrentDate] = useState(new Date());
   const [edtId, setEdtId] = useState(0);
-  const niveaulbl = [
-    {
-      id_niveau: 1,
-      niveau: "L1 PRO",
-    },
-    {
-      id_niveau: 2,
-      niveau: "L1 IG",
-    },
-    {
-      id_niveau: 3,
-      niveau: "L2 GB",
-    },
-    {
-      id_niveau: 4,
-      niveau: "L2 SR",
-    },
-    {
-      id_niveau: 5,
-      niveau: "L2 IG",
-    },
-    {
-      id_niveau: 6,
-      niveau: "L3 GB",
-    },
-    {
-      id_niveau: 7,
-      niveau: "L3 SR",
-    },
-    {
-      id_niveau: 8,
-      niveau: "L3 IG",
-    },
-    {
-      id_niveau: 9,
-      niveau: "M1 GB",
-    },
-    {
-      id_niveau: 10,
-      niveau: "M1 SR",
-    },
-    {
-      id_niveau: 11,
-      niveau: "M1 IG",
-    },
-    {
-      id_niveau: 12,
-      niveau: "M2 GB",
-    },
-    {
-      id_niveau: 13,
-      niveau: "M2 SR",
-    },
-    {
-      id_niveau: 14,
-      niveau: "M2 IG",
-    },
-  ];
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  const dateSelectionnee = new Date();
-  const [currentDate, setCurrentDate] = useState(dateSelectionnee);
-  const [startOfWeekDate, setStartOfWeekDate] = useState(new Date());
-  const [endOfWeekDate, setEndOfWeekDate] = useState(new Date());
-
-  useEffect(() => {
-    console.log("Fetching niveaux...");
-    fetchNiveaux();
-    if (currentDate) {
-      const startOfWeekDate = startOfWeek(currentDate, { weekStartsOn: 1 }); // 1 pour lundi
-      const endOfWeekDate = endOfWeek(currentDate, { weekStartsOn: 1 }); // 1 pour lundi
-
-      setStartOfWeekDate(startOfWeekDate);
-      setEndOfWeekDate(endOfWeekDate);
-    }
-  }, [currentDate]);
-
-  const fetchNiveaux = async () => {
-    try {
-      const response = await axios.get(`${process.env.NEXT_PUBLIC_BACK_URL}/api/niveaux`);
-      console.log("Niveaux reçus :", response.data);
-      setNiveaux(response.data);
-    } catch (error) {
-      console.error("Erreur lors de la récupération des niveaux", error);
-    }
-  };
-
-  const handleNiveauChange = async (event: { target: { value: any } }) => {
-    const selectedValue = event.target.value;
-
-    if (selectedValue !== "none") {
-      setSelectedNiveau(selectedValue);
-      getEdt(selectedValue, startOfWeekDate, endOfWeekDate);
-    }
-  };
-  // Recherche du niveau correspondant à l'id sélectionné
-  const niveauSelectionne = niveaulbl.find(
-    (niveau) => niveau.id_niveau === parseInt(selectedNiveau, 10)
+  const weekStart = useMemo(
+    () => startOfWeek(currentDate, { weekStartsOn: 1 }),
+    [currentDate]
+  );
+  const weekEnd = useMemo(
+    () => endOfWeek(currentDate, { weekStartsOn: 1 }),
+    [currentDate]
   );
 
-  const getEdt = async (niveau: string, date1: Date, date2: Date) => {
-    try {
-      const formattedDate1 = formatDate(date1);
-      const formattedDate2 = formatDate(date2);
-
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_BACK_URL}/api/edt/${niveau}?date1=${formattedDate1}&date2=${formattedDate2}`
-      );
-      if (response.ok) {
-        const data = await response.json();
-
-        setEdts(data);
-      } else {
-        console.error("Erreur lors de la récupération des emploies du temps");
+  useEffect(() => {
+    async function loadNiveaux() {
+      try {
+        setNiveaux(await getNiveaux());
+      } catch (error) {
+        Swal.fire("Erreur", unwrapError(error, "Impossible de charger les niveaux"), "error");
       }
-    } catch (error) {
-      console.error(
-        "Erreur lors de la récupération des emploies deu temps:",
-        error
-      );
     }
-  };
 
-  const formatDate = (date: Date) => {
-    const year = date.getFullYear();
-    const month = (date.getMonth() + 1).toString().padStart(2, "0");
-    const day = date.getDate().toString().padStart(2, "0");
-    return `${year}-${month}-${day}`;
-  };
+    void loadNiveaux();
+  }, []);
 
-  const refreshEdt = async () => {
+  async function loadTimetable(niveauId: string, start = weekStart, end = weekEnd) {
     try {
-      const formattedDate1 = formatDate(startOfWeekDate);
-      const formattedDate2 = formatDate(endOfWeekDate);
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_BACK_URL}/api/edt/${selectedNiveau}?date1=${formattedDate1}&date2=${formattedDate2}`
-      );
-      if (response.ok) {
-        const data = await response.json();
-
-        setEdts(data);
-      } else {
-        console.error("Erreur lors de la récupération des emploies du temps");
-      }
+      setLoading(true);
+      setEdts(await getTimetableByNiveau(niveauId, toApiDate(start), toApiDate(end)));
     } catch (error) {
-      console.error(
-        "Erreur lors de la récupération des emploies deu temps:",
-        error
-      );
+      Swal.fire("Erreur", unwrapError(error, "Impossible de charger l'emploi du temps"), "error");
+    } finally {
+      setLoading(false);
     }
-  };
-
-  const handleDeleteEdt = (id: any) => {
-    Swal.fire({
-      title: "Êtes-vous sûr de vouloir supprimer cette emploie du temps ?",
-      text: "Cette action est irréversible !",
-      icon: "warning",
-      showCancelButton: true,
-      confirmButtonColor: "#d33",
-      cancelButtonColor: "#3085d6",
-      confirmButtonText: "Oui, supprimer !",
-    }).then(async (result) => {
-      if (result.isConfirmed) {
-        try {
-          // Faites votre appel à l'API pour supprimer le matière avec l'ID
-          await axios.delete(`${process.env.NEXT_PUBLIC_BACK_URL}/api/edt/${id}`);
-
-          // Rafraîchir la liste des matières après la suppression
-          refreshEdt();
-        } catch (error) {
-          console.error(
-            "Erreur lors de la suppression de l'emploie du temps:",
-            error
-          );
-        }
-      }
-    });
-  };
-
-  const filterEdtsForCurrentWeek = () => {
-    // Obtenez le début et la fin de la semaine pour la date sélectionnée
-    const { debutSemaine, finSemaine } = getDebutFinSemaine(currentDate);
-
-    // Filtrez les éléments de l'emploi du temps en fonction de la date
-    const filteredEdts = edts.filter((edt) => {
-      const dateEdt = new Date(edt.date);
-      return dateEdt >= debutSemaine && dateEdt <= finSemaine;
-    });
-  };
-  const openModal = () => {
-    setIsModalOpen(true);
-  };
-
-  const closeModal = () => {
-    refreshEdt();
-    setIsModalOpen(false);
-  };
-
-  const openEditModal = (edtId: number) => {
-    setIsEditModalOpen(true);
-    setEdtId(edtId);
-  };
-
-  const closeEditModal = () => {
-    refreshEdt();
-    setIsEditModalOpen(false);
-  };
-
-  // Fonction pour afficher la semaine précédente
-  const showPreviousWeek = () => {
-    const previousWeek = addDays(startOfWeekDate, -7);
-    setCurrentDate(previousWeek);
-    setStartOfWeekDate(previousWeek);
-    setEndOfWeekDate(endOfWeek(previousWeek, { weekStartsOn: 1 }));
-    getEdt(
-      selectedNiveau,
-      previousWeek,
-      endOfWeek(previousWeek, { weekStartsOn: 1 })
-    );
-  };
-
-  // Fonction pour afficher la semaine suivante
-  const showNextWeek = () => {
-    const nextWeek = addDays(startOfWeekDate, 7);
-    setCurrentDate(nextWeek);
-    setStartOfWeekDate(nextWeek);
-    setEndOfWeekDate(endOfWeek(nextWeek, { weekStartsOn: 1 }));
-
-    getEdt(selectedNiveau, nextWeek, endOfWeek(nextWeek, { weekStartsOn: 1 }));
-  };
-
-  // Fonction pour obtenir le début et la fin de la semaine
-  function getDebutFinSemaine(date: Date) {
-    const debutSemaine = new Date(date);
-    debutSemaine.setDate(debutSemaine.getDate() - debutSemaine.getDay() + 1); // Lundi
-
-    const finSemaine = new Date(date);
-    finSemaine.setDate(debutSemaine.getDate() + 6); // Samedi
-
-    return { debutSemaine, finSemaine };
   }
 
-  // Obtenez le début et la fin de la semaine pour la date sélectionnée
-  const { debutSemaine, finSemaine } = getDebutFinSemaine(currentDate);
+  async function handleDelete(id: number) {
+    const result = await Swal.fire({
+      title: "Supprimer ce cours ?",
+      text: "Cette action est irreversible.",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#dc2626",
+      confirmButtonText: "Supprimer",
+    });
 
-  // Affichage des dates dans le format souhaité pour la semaine
-  const debutSemaineFormat = debutSemaine.toLocaleDateString("fr-FR", {
-    month: "long",
-    day: "numeric",
-  });
-  const finSemaineFormat = finSemaine.toLocaleDateString("fr-FR", {
-    month: "long",
-    day: "numeric",
-  });
+    if (!result.isConfirmed) {
+      return;
+    }
+
+    try {
+      await deleteTimetableEntry(id);
+      if (selectedNiveau) {
+        await loadTimetable(selectedNiveau);
+      }
+      await Swal.fire("Succes", "Cours supprime", "success");
+    } catch (error) {
+      Swal.fire("Erreur", unwrapError(error, "Suppression impossible"), "error");
+    }
+  }
 
   return (
-    <div className="w-full">
-      <div className="w-full mb-5">
-        <select
-          id="niveaux"
-          className="bg-white border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-teal-500 focus:border-teal-500 block w-full p-2.5"
-          onChange={handleNiveauChange}
-          value={selectedNiveau}
-        >
-          <option value="none">Choisir un niveau</option>
-          {niveaux.map((niveau) => (
-            <option key={niveau.id_niveau} value={niveau.id_niveau}>
-              {niveau.niveau}
-            </option>
-          ))}
-        </select>
-        <br />
-        <div className="w-full md:w-2/3 mx-auto text-center font-bold">
-          {selectedNiveau !== "none" && niveauSelectionne ? (
-            <h3 className="text-lg">Emploi du temps pour {niveauSelectionne.niveau}</h3>
-          ) : (
-            <h3 className="text-lg">Sélectionnez un niveau pour afficher emploi du temps</h3>
-          )}
+    <div className="space-y-6">
+      <div className="flex flex-col gap-4 rounded-3xl bg-slate-50 p-5 md:flex-row md:items-center md:justify-between">
+        <div>
+          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-teal-700">
+            Gestion
+          </p>
+          <h2 className="mt-1 text-2xl font-bold text-slate-900">Emploi du temps</h2>
+          <p className="mt-2 text-sm text-slate-600">
+            Semaine du {format(weekStart, "dd/MM/yyyy")} au {format(weekEnd, "dd/MM/yyyy")}
+          </p>
+        </div>
+
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => {
+                const nextDate = addDays(weekStart, -7);
+                setCurrentDate(nextDate);
+                if (selectedNiveau) {
+                  void loadTimetable(selectedNiveau, nextDate, endOfWeek(nextDate, { weekStartsOn: 1 }));
+                }
+              }}
+              className="rounded-xl border border-slate-200 bg-white p-2 text-slate-700"
+            >
+              <ChevronLeftIcon className="h-5 w-5" />
+            </button>
+            <button
+              onClick={() => {
+                const nextDate = addDays(weekStart, 7);
+                setCurrentDate(nextDate);
+                if (selectedNiveau) {
+                  void loadTimetable(selectedNiveau, nextDate, endOfWeek(nextDate, { weekStartsOn: 1 }));
+                }
+              }}
+              className="rounded-xl border border-slate-200 bg-white p-2 text-slate-700"
+            >
+              <ChevronRightIcon className="h-5 w-5" />
+            </button>
+          </div>
+          <select
+            value={selectedNiveau}
+            onChange={(event) => {
+              const value = event.target.value;
+              setSelectedNiveau(value);
+              if (value) {
+                void loadTimetable(value);
+              } else {
+                setEdts([]);
+              }
+            }}
+            className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:border-teal-500"
+          >
+            <option value="">Choisir un niveau</option>
+            {niveaux.map((niveau) => (
+              <option key={niveau.id_niveau} value={niveau.id_niveau}>
+                {niveau.niveau}
+              </option>
+            ))}
+          </select>
+          <button
+            onClick={() => setIsCreateOpen(true)}
+            disabled={!selectedNiveau}
+            className="inline-flex items-center justify-center gap-2 rounded-2xl bg-teal-600 px-4 py-3 text-sm font-semibold text-white disabled:opacity-50"
+          >
+            <PlusIcon className="h-5 w-5" />
+            Nouveau cours
+          </button>
         </div>
       </div>
-      <button
-        onClick={openModal}
-        type="button"
-        className="flex items-center mx-auto justify-center text-center text-black bg-gradient-to-r from-teal-300 to-lime-300 hover:bg-gradient-to-l hover:from-teal-200 hover:to-lime-200 focus:ring-4 focus:outline-none focus:ring-lime-300 font-medium rounded-lg text-sm px-5 mb-3 py-2.5"
-      >
-        <PlusIcon className="w-5 h-5" />
-        Ajouter
-      </button>
-      <AjoutModal isOpen={isModalOpen} onClose={closeModal} />
-      {edtId !== 0 && (
-        <EditModal
-          isOpen={isEditModalOpen}
-          onClose={closeEditModal}
-          edtId={edtId}
-        />
-      )}
-      <div className="container mx-auto w-full md:w-5/6">
-        <div className="wrapper bg-white rounded-2xl shadow-lg w-full p-5">
-          <div className="header flex justify-between border-b p-2 mb-4">
-            <span className="text-lg font-bold text-teal-500">
-              Semaine du {debutSemaineFormat} - {finSemaineFormat}, {debutSemaine.getFullYear()}
-            </span>
-            <div className="buttons flex space-x-2">
-              <button className="p-1" onClick={showPreviousWeek}>
-                <ChevronLeftIcon className="w-6 h-6 text-gray-500" />
-              </button>
-              <button className="p-1" onClick={showNextWeek}>
-                <ChevronRightIcon className="w-6 h-6 text-gray-500" />
-              </button>
-            </div>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr>
-                  {["Heure", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day, index) => (
-                    <th
-                      key={index}
-                      className="p-2 text-teal-500 border-r h-10 xl:w-40 lg:w-30 md:w-30 sm:w-20 w-10 xl:text-sm text-xs"
-                    >
-                      {day}
-                    </th>
-                  ))}
+
+      <div className="overflow-hidden rounded-3xl border border-slate-200">
+        <table className="min-w-full divide-y divide-slate-200 bg-white">
+          <thead className="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-600">
+            <tr>
+              <th className="px-6 py-4">Date</th>
+              <th className="px-6 py-4">Horaire</th>
+              <th className="px-6 py-4">Matiere</th>
+              <th className="px-6 py-4">Enseignant</th>
+              <th className="px-6 py-4">Salle</th>
+              <th className="px-6 py-4 text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {loading ? (
+              <tr>
+                <td colSpan={6} className="px-6 py-10 text-center text-sm text-slate-500">
+                  Chargement...
+                </td>
+              </tr>
+            ) : edts.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="px-6 py-10 text-center text-sm text-slate-500">
+                  Selectionnez un niveau pour afficher les cours de la semaine.
+                </td>
+              </tr>
+            ) : (
+              edts.map((edt) => (
+                <tr key={edt.id_edt} className="hover:bg-slate-50">
+                  <td className="px-6 py-4 text-sm text-slate-700">
+                    {format(new Date(edt.date), "dd/MM/yyyy")}
+                  </td>
+                  <td className="px-6 py-4 text-sm text-slate-700">
+                    {edt.heure} - {edt.heure_fin}
+                  </td>
+                  <td className="px-6 py-4 text-sm font-medium text-slate-900">
+                    {edt.matiere}
+                  </td>
+                  <td className="px-6 py-4 text-sm text-slate-700">
+                    {edt.nom_enseignant} {edt.prenom_enseignant}
+                  </td>
+                  <td className="px-6 py-4 text-sm text-slate-700">{edt.num_salle}</td>
+                  <td className="px-6 py-4">
+                    <div className="flex justify-end gap-3">
+                      <button
+                        onClick={() => {
+                          setEdtId(edt.id_edt);
+                          setIsEditOpen(true);
+                        }}
+                        className="rounded-xl bg-sky-50 p-2 text-sky-700 transition hover:bg-sky-100"
+                      >
+                        <PencilIcon className="h-5 w-5" />
+                      </button>
+                      <button
+                        onClick={() => void handleDelete(edt.id_edt)}
+                        className="rounded-xl bg-rose-50 p-2 text-rose-700 transition hover:bg-rose-100"
+                      >
+                        <TrashIcon className="h-5 w-5" />
+                      </button>
+                    </div>
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {["7:30 - 9:00", "9:00 - 10:30", "10:30 - 12:00", "13:00 - 14:30", "14:30 - 16:00", "16:00 - 17:30"].map((hourRange, index) => (
-                  <React.Fragment key={index}>
-                    <tr className="text-center h-20">
-                      <td className="border-r p-2 xl:w-40 lg:w-30 md:w-30 sm:w-20 w-10">
-                        <div className="text-left">
-                          <div className="text-sm">{hourRange}</div>
-                        </div>
-                      </td>
-                      {["Mon", "Tue", "Wed", "Thu", "Fri"].map((day, dayIndex) => (
-                        <td key={dayIndex} className="border-r p-2 xl:w-40 lg:w-30 md:w-30 sm:w-20 w-10">
-                          {edts.map((edt) => {
-                            const dateEdt = new Date(edt.date);
-                            const jourSemaineEdt = dateEdt.getDay();
-
-                            if (
-                              (day === "Mon" && jourSemaineEdt === 1) ||
-                              (day === "Tue" && jourSemaineEdt === 2) ||
-                              (day === "Wed" && jourSemaineEdt === 3) ||
-                              (day === "Thu" && jourSemaineEdt === 4) ||
-                              (day === "Fri" && jourSemaineEdt === 5)
-                            ) {
-                              const hourRangeArray = hourRange.split(" - ");
-                              const startHour = parseInt(hourRangeArray[0].split(":")[0]);
-                              const endHour = parseInt(hourRangeArray[1].split(":")[0]);
-                              const heureEdt = parseInt(edt.heure.split(":")[0]);
-
-                              if (heureEdt >= startHour && heureEdt < endHour) {
-                                return (
-                                  <div key={edt.id_edt} className="text-left">
-                                    <div className="text-sm font-bold">
-                                      {edt.matiere} {edt.id_edt}
-                                    </div>
-                                    <div className="text-xs">Prof: {edt.nom_enseignant} {edt.prenom_enseignant}</div>
-                                    <div className="text-xs">Salle: {edt.num_salle}</div>
-                                    <div className="flex gap-2">
-                                      <button
-                                        type="button"
-                                        className="font-medium text-blue-600 hover:text-blue-800"
-                                        onClick={() => openEditModal(edt.id_edt)}
-                                      >
-                                        <PencilIcon className="w-4 h-4 text-blue-500" />
-                                      </button>
-                                      <button
-                                        type="button"
-                                        className="font-medium text-red-600 hover:text-red-800"
-                                        onClick={() => handleDeleteEdt(edt.id_edt)}
-                                      >
-                                        <XIcon className="w-5 h-5 text-red-600" />
-                                      </button>
-                                    </div>
-                                  </div>
-                                );
-                              }
-                            }
-                            return null;
-                          })}
-                        </td>
-                      ))}
-                    </tr>
-                    {index < 5 && <tr className="h-1 bg-gray-500"></tr>}
-                  </React.Fragment>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+              ))
+            )}
+          </tbody>
+        </table>
       </div>
+
+      <AjoutModal
+        isOpen={isCreateOpen}
+        defaultNiveauId={selectedNiveau}
+        onClose={() => setIsCreateOpen(false)}
+        onSaved={() => {
+          if (selectedNiveau) {
+            void loadTimetable(selectedNiveau);
+          }
+        }}
+      />
+      <EditModal
+        isOpen={isEditOpen}
+        edtId={edtId}
+        onClose={() => setIsEditOpen(false)}
+        onSaved={() => {
+          if (selectedNiveau) {
+            void loadTimetable(selectedNiveau);
+          }
+        }}
+      />
     </div>
   );
 }

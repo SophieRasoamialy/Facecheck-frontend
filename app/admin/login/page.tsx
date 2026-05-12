@@ -7,26 +7,23 @@ import { useRouter } from "next/navigation";
 import Swal from "sweetalert2";
 
 import AuthShell from "@/components/auth/AuthShell";
-import { loginStudent, unwrapError } from "@/lib/api";
+import { loginAdmin, unwrapError } from "@/lib/api";
 import { saveSession } from "@/lib/session";
 
-export default function LoginForm() {
+export default function AdminLoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
-  async function handleVerification(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+
     try {
       setLoading(true);
-      const student = await loginStudent({ email, password });
-      saveSession({
-        role: "student",
-        id: student.id_etudiant,
-        email: student.email,
-      });
-      router.push(`/etudiant/${student.id_etudiant}`);
+      const admin = await loginAdmin({ email, password });
+      saveSession({ role: "admin", id: admin.id, email: admin.email });
+      router.push("/admin/gestionEdt");
     } catch (error) {
       Swal.fire("Erreur", unwrapError(error, "Connexion impossible"), "error");
     } finally {
@@ -36,9 +33,9 @@ export default function LoginForm() {
 
   return (
     <AuthShell
-      eyebrow="Etudiant"
-      title="Connexion etudiant"
-      description="Connectez-vous avec votre email et votre mot de passe pour acceder a votre espace personnel."
+      eyebrow="Administration"
+      title="Connexion admin"
+      description="Connectez-vous avec votre email et votre mot de passe pour acceder a l'espace d'administration."
       backHref="/"
     >
       <div className="relative">
@@ -51,7 +48,7 @@ export default function LoginForm() {
           </div>
         ) : null}
 
-        <form onSubmit={handleVerification} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4">
           <label className="grid gap-2 text-sm font-medium text-slate-700">
             Email
             <input
@@ -72,8 +69,8 @@ export default function LoginForm() {
               required
             />
           </label>
-          <div className="flex justify-between gap-4 text-sm">
-            <Link href="/etudiant/forgot-password" className="font-medium text-teal-700 hover:text-teal-800">
+          <div className="flex justify-end">
+            <Link href="/admin/forgot-password" className="text-sm font-medium text-teal-700 hover:text-teal-800">
               Mot de passe oublie ?
             </Link>
           </div>

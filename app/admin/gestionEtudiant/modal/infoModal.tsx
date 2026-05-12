@@ -1,6 +1,12 @@
-'use client';
-import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+"use client";
+
+import { useEffect, useState } from "react";
+import Swal from "sweetalert2";
+
+import ModalShell from "@/components/ui/ModalShell";
+import { formatDisplayDate } from "@/lib/date";
+import { getEtudiantAbsences, unwrapError } from "@/lib/api";
+import type { StudentCourse } from "@/lib/types";
 
 interface ModalProps {
   isOpen: boolean;
@@ -8,59 +14,60 @@ interface ModalProps {
   id_etudiant: number;
 }
 
-interface Timetable {
-  id_edt: number;
-  date: string;
-  heure: string;
-  matiere: string;
-}
-
-const InfoModal: React.FC<ModalProps> = ({ isOpen, onClose, id_etudiant }) => {
-  const [absentTimetable, setAbsentTimetable] = useState<Timetable[]>([]);
+export default function InfoModal({ isOpen, onClose, id_etudiant }: ModalProps) {
+  const [absentTimetable, setAbsentTimetable] = useState<StudentCourse[]>([]);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (isOpen) {
-      fetchStudentTimetable();
-    }
-  }, [isOpen]);
+    async function loadAbsences() {
+      if (!isOpen || !id_etudiant) {
+        return;
+      }
 
-  const fetchStudentTimetable = async () => {
-    if(id_etudiant !== 0)
-    {
       try {
-        const response = await axios.get(`${process.env.NEXT_PUBLIC_BACK_URL}/api/etudiants/etudiants/${id_etudiant}`);
-        if (response.status === 200) {
-          const data = response.data;
-          setAbsentTimetable(data);
-        } else {
-          console.error('Erreur lors de la récupération des détails d\'absence de l\'étudiant');
-        }
+        setLoading(true);
+        setAbsentTimetable(await getEtudiantAbsences(id_etudiant));
       } catch (error) {
-        console.error('Erreur lors de la récupération des détails d\'absence de l\'étudiant:', error);
+        Swal.fire("Erreur", unwrapError(error, "Chargement impossible"), "error");
+      } finally {
+        setLoading(false);
       }
     }
-  };
+
+    void loadAbsences();
+  }, [id_etudiant, isOpen]);
 
   return (
-    isOpen && (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-        <div className="bg-white rounded-lg p-8">
-        <h1 className = "font-bold mb-5">Details des cours non assiste</h1>
-        <dl className="max-w-md text-gray-900 divide-y divide-gray-200">
-        {absentTimetable.map((timetable) => (
-          <div className="flex flex-col pb-3" key={timetable.id_edt}>
-              <dt className="mb-1 text-gray-500 "> Date : Le {timetable.date} a {timetable.heure}</dt>
-              <dd className="font-semibold">Matiere: {timetable.matiere}</dd>
-          </div>
-         ))}
-      </dl>
-      <button onClick={onClose} className="mt-4 mx-auto bg-red-500 text-white px-4 py-2 rounded-lg">
-        Close
-      </button>
+    <ModalShell
+      isOpen={isOpen}
+      title="Cours non assistes"
+      footer={
+        <button
+          onClick={onClose}
+          className="rounded-2xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white"
+        >
+          Fermer
+        </button>
+      }
+    >
+      {loading ? (
+        <p className="text-sm text-slate-500">Chargement...</p>
+      ) : absentTimetable.length === 0 ? (
+        <p className="text-sm text-slate-500">Aucune absence detaillee pour cet etudiant.</p>
+      ) : (
+        <div className="space-y-3">
+          {absentTimetable.map((course) => (
+            <div key={course.id_edt} className="rounded-2xl bg-slate-50 p-4">
+              <p className="text-sm text-slate-500">
+                Le {formatDisplayDate(course.date)} a {course.heure}
+              </p>
+              <p className="mt-1 text-sm font-semibold text-slate-900">
+                {course.matiere}
+              </p>
+            </div>
+          ))}
         </div>
-      </div>
-    )
+      )}
+    </ModalShell>
   );
-};
-
-export default InfoModal;
+}

@@ -1,190 +1,173 @@
 "use client";
-import React, { useState, useEffect } from "react";
-import axios from "axios";
+
+import { useEffect, useState } from "react";
 import Swal from "sweetalert2";
-import s3 from "../../../../aws-config";
-import { Trykker } from "next/font/google";
+
+import ModalShell from "@/components/ui/ModalShell";
+import s3 from "@/aws-config";
+import { createEtudiant, getNiveaux, unwrapError } from "@/lib/api";
+import type { Niveau } from "@/lib/types";
+
 interface ModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onSaved: () => void;
 }
 
-interface Niveau {
-  id_niveau: number;
-  niveau: string;
+async function uploadStudentPhoto(studentPhoto: File | null) {
+  if (!studentPhoto) {
+    return "";
+  }
+
+  const uploadResult = await s3
+    .upload({
+      Bucket: process.env.NEXT_PUBLIC_S3_BUCKET_NAME!,
+      Key: `students/${Date.now()}_${studentPhoto.name}`,
+      Body: studentPhoto,
+      ContentType: studentPhoto.type,
+    })
+    .promise();
+
+  return uploadResult.Location;
 }
 
-const AjoutModal: React.FC<ModalProps> = ({ isOpen, onClose }) => {
+export default function AjoutModal({ isOpen, onClose, onSaved }: ModalProps) {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [selectedNiveau, setSelectedNiveau] = useState("");
   const [niveaux, setNiveaux] = useState<Niveau[]>([]);
-  const [selectedNiveau, setSelectedNiveau] = useState("none");
   const [studentPhoto, setStudentPhoto] = useState<File | null>(null);
-
-  // Fonction pour envoyer les données au backend
-  const handleEnregistrer = async () => {
-    try {
-      let fileName = "";
-      if (studentPhoto) {
-        const s3Params = {
-          Bucket: process.env.NEXT_PUBLIC_S3_BUCKET_NAME!,
-          Key: `students/${Date.now()}_${studentPhoto.name}`, // Nom unique
-          Body: studentPhoto,
-          ContentType: studentPhoto.type,
-        };
-
-        const uploadResult = await s3.upload(s3Params).promise();
-        fileName = uploadResult.Location; // URL publique du fichier
-      }
-
-      const response = await axios.post(
-        `${process.env.NEXT_PUBLIC_BACK_URL}/api/etudiants`,
-        {
-          nom_etudiant: firstName,
-          prenom_etudiant: lastName,
-          id_niveau: selectedNiveau,
-          photo_etudiant: fileName,
-        }
-      );
-
-      if (response.status === 200) {
-        Swal.fire("Succès", "Données enregistrées avec succès", "success");
-        onClose();
-      } else {
-        Swal.fire(
-          "Erreur",
-          "Erreur lors de l'enregistrement des données",
-          "error"
-        );
-      }
-    } catch (error) {
-      console.error("Erreur lors de la requête:", error);
-    }
-  };
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    console.log("Fetching niveaux...");
-    fetchNiveaux();
-  }, []);
+    async function loadNiveaux() {
+      if (!isOpen) {
+        return;
+      }
 
-  const fetchNiveaux = async () => {
-    try {
-      const response = await axios.get(
-        `${process.env.NEXT_PUBLIC_BACK_URL}/api/niveaux`
-      );
-      console.log("Niveaux reçus :", response.data);
-      setNiveaux(response.data);
-    } catch (error) {
-      console.error("Erreur lors de la récupération des niveaux", error);
+      try {
+        setNiveaux(await getNiveaux());
+      } catch (error) {
+        Swal.fire("Erreur", unwrapError(error, "Impossible de charger les niveaux"), "error");
+      }
     }
-  };
 
-  const handleFirstNameChange = (
-    event: React.ChangeEvent<HTMLInputElement>
-  ) => {
-    setFirstName(event.target.value);
-  };
+    void loadNiveaux();
+  }, [isOpen]);
 
-  const handleLastNameChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    setLastName(event.target.value);
-  };
-
-  const handleNiveauChange = async (event: { target: { value: any } }) => {
-    setSelectedNiveau(event.target.value);
-  };
-  if (!isOpen) return null;
+  async function handleSave() {
+    try {
+      setSaving(true);
+      const photoUrl = await uploadStudentPhoto(studentPhoto);
+      await createEtudiant({
+        nom_etudiant: firstName.trim(),
+        prenom_etudiant: lastName.trim(),
+        id_niveau: Number(selectedNiveau),
+        email: email.trim(),
+        password,
+        photo_etudiant: photoUrl,
+      });
+      await Swal.fire("Succes", "Etudiant ajoute", "success");
+      setFirstName("");
+      setLastName("");
+      setEmail("");
+      setPassword("");
+      setSelectedNiveau("");
+      setStudentPhoto(null);
+      onSaved();
+      onClose();
+    } catch (error) {
+      Swal.fire("Erreur", unwrapError(error, "Creation impossible"), "error");
+    } finally {
+      setSaving(false);
+    }
+  }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-      <div className="bg-white rounded-lg p-6 w-full max-w-md sm:max-w-lg md:max-w-xl">
-        <h3 className="text-2xl font-bold mb-4">Nouveau Etudiant</h3>
-        <div>
-          <form className=" rounded-lg ">
-            <div className="mb-4">
-              <label
-                htmlFor="firstName"
-                className="block text-sm font-medium text-gray-900"
-              >
-                First Name
-              </label>
-              <input
-                type="text"
-                id="firstName"
-                name="firstName"
-                value={firstName}
-                onChange={handleFirstNameChange}
-                className="block w-full p-2 border border-gray-300 rounded-lg"
-                placeholder="Enter first name"
-              />
-            </div>
-            <div className="mb-4">
-              <label
-                htmlFor="lastName"
-                className="block text-sm font-medium text-gray-900"
-              >
-                Last Name
-              </label>
-              <input
-                type="text"
-                id="lastName"
-                name="lastName"
-                value={lastName}
-                onChange={handleLastNameChange}
-                className="block w-full p-2 border border-gray-300 rounded-lg"
-                placeholder="Enter last name"
-              />
-            </div>
-            <div className="mb-4">
-              <label
-                htmlFor="studentPhoto"
-                className="block text-sm font-medium text-gray-900"
-              >
-                Photo de étudiant
-              </label>
-              <input
-                type="file"
-                id="studentPhoto"
-                name="studentPhoto"
-                onChange={(e) =>
-                  setStudentPhoto(e.target.files ? e.target.files[0] : null)
-                }
-                className="block w-full p-2 border border-gray-300 rounded-lg"
-              />
-            </div>
-            <div className="mb-4">
-              <select
-                id="niveaux"
-                className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5"
-                onChange={handleNiveauChange}
-                value={selectedNiveau}
-              >
-                <option value="none">Choisir un niveau</option>
-                {niveaux.map((niveau, index) => (
-                  <option key={niveau.id_niveau} value={niveau.id_niveau}>
-                    {niveau.niveau}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </form>
-        </div>
-        <div className="flex gap-2 mt-4">
+    <ModalShell
+      isOpen={isOpen}
+      title="Nouvel etudiant"
+      footer={
+        <>
           <button
             onClick={onClose}
-            className=" inline-block px-8 py-4 bg-gradient-to-r from-gray-800 to-gray-900 text-white rounded-lg shadow-lg hover:bg-gray-700 transition-all duration-300"
+            className="rounded-2xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white"
           >
-            Close
+            Fermer
           </button>
           <button
-            onClick={handleEnregistrer}
-            type="button"
-            className=" inline-block px-8 py-4 bg-gradient-to-r from-teal-300 to-lime-300 text-black rounded-lg shadow-lg hover:bg-gradient-to-l hover:from-teal-400 hover:to-lime-400 transition-all duration-300"
+            onClick={() => void handleSave()}
+            disabled={saving || !firstName.trim() || !lastName.trim() || !email.trim() || !password || !selectedNiveau}
+            className="rounded-2xl bg-teal-600 px-5 py-3 text-sm font-semibold text-white disabled:opacity-50"
           >
-            Enregistrer
+            {saving ? "Enregistrement..." : "Enregistrer"}
           </button>
-        </div>
+        </>
+      }
+    >
+      <div className="grid gap-4">
+        <label className="grid gap-2 text-sm font-medium text-slate-700">
+          Nom
+          <input
+            type="text"
+            value={firstName}
+            onChange={(event) => setFirstName(event.target.value)}
+            className="rounded-2xl border border-slate-200 px-4 py-3 outline-none focus:border-teal-500"
+          />
+        </label>
+        <label className="grid gap-2 text-sm font-medium text-slate-700">
+          Prenom
+          <input
+            type="text"
+            value={lastName}
+            onChange={(event) => setLastName(event.target.value)}
+            className="rounded-2xl border border-slate-200 px-4 py-3 outline-none focus:border-teal-500"
+          />
+        </label>
+        <label className="grid gap-2 text-sm font-medium text-slate-700">
+          Email
+          <input
+            type="email"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            className="rounded-2xl border border-slate-200 px-4 py-3 outline-none focus:border-teal-500"
+          />
+        </label>
+        <label className="grid gap-2 text-sm font-medium text-slate-700">
+          Mot de passe initial
+          <input
+            type="password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            className="rounded-2xl border border-slate-200 px-4 py-3 outline-none focus:border-teal-500"
+          />
+        </label>
+        <label className="grid gap-2 text-sm font-medium text-slate-700">
+          Photo
+          <input
+            type="file"
+            onChange={(event) => setStudentPhoto(event.target.files?.[0] ?? null)}
+            className="rounded-2xl border border-slate-200 px-4 py-3 outline-none focus:border-teal-500"
+          />
+        </label>
+        <label className="grid gap-2 text-sm font-medium text-slate-700">
+          Niveau
+          <select
+            value={selectedNiveau}
+            onChange={(event) => setSelectedNiveau(event.target.value)}
+            className="rounded-2xl border border-slate-200 px-4 py-3 outline-none focus:border-teal-500"
+          >
+            <option value="">Choisir un niveau</option>
+            {niveaux.map((niveau) => (
+              <option key={niveau.id_niveau} value={niveau.id_niveau}>
+                {niveau.niveau}
+              </option>
+            ))}
+          </select>
+        </label>
       </div>
-    </div>
+    </ModalShell>
   );
-};
-export default AjoutModal;
+}

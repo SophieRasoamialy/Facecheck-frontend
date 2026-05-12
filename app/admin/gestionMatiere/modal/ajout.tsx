@@ -1,188 +1,145 @@
 "use client";
-import React, { useState, useEffect } from "react";
-import axios from "axios";
+
+import { useEffect, useState } from "react";
 import Swal from "sweetalert2";
+
+import ModalShell from "@/components/ui/ModalShell";
+import {
+  createMatiere,
+  getEnseignantsList,
+  getNiveaux,
+  unwrapError,
+} from "@/lib/api";
+import type { Enseignant, Niveau } from "@/lib/types";
+
 interface ModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onSaved: () => void;
+  selectedNiveau: string;
 }
 
-interface Niveau {
-  id_niveau: number;
-  niveau: string;
-} 
-
-interface Enseignant {
-  id_enseignant: number;
-  prenom_enseignant: string;
-  nom_enseignant: string;
-}
-
-const AjoutModal: React.FC<ModalProps> = ({ isOpen, onClose }) => {
+export default function AjoutModal({
+  isOpen,
+  onClose,
+  onSaved,
+  selectedNiveau,
+}: ModalProps) {
   const [matiere, setMatiere] = useState("");
   const [prof, setProf] = useState("");
+  const [niveau, setNiveau] = useState(selectedNiveau);
   const [niveaux, setNiveaux] = useState<Niveau[]>([]);
-  const [selectedNiveau, setSelectedNiveau] = useState("none");
   const [enseignants, setEnseignants] = useState<Enseignant[]>([]);
-
-  // Fonction pour envoyer les données au backend
-  const handleEnregistrer = async () => {
-    try {
-      const response = await axios.post(
-        `${process.env.NEXT_PUBLIC_BACK_URL}/api/matieres`,
-        {
-          matiere: matiere,
-          id_enseignant: prof,
-          id_niveau: selectedNiveau,
-        }
-      );
-
-      if (response.status === 200) {
-        // Gérer la réponse si nécessaire
-        Swal.fire("Succès", "Données enregistrées avec succès", "success");
-        onClose();
-      } else {
-        Swal.fire(
-          "Erreur",
-          "Erreur lors de l'enregistrement des données",
-          "error"
-        );
-      }
-    } catch (error) {
-      console.error("Erreur lors de la requête:", error);
-    }
-  };
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    fetchNiveaux();
-    fetchEnseignants();
-  }, []);
+    setNiveau(selectedNiveau);
+  }, [selectedNiveau]);
 
-  async function fetchEnseignants() {
-    try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_BACK_URL}/api/enseignants`); // Remplacez l'URL par celle de votre backend
-      if (response.ok) {
-        const data = await response.json();
-        setEnseignants(data);
+  useEffect(() => {
+    async function loadReferences() {
+      if (!isOpen) {
+        return;
       }
+
+      try {
+        const [loadedNiveaux, loadedEnseignants] = await Promise.all([
+          getNiveaux(),
+          getEnseignantsList(),
+        ]);
+        setNiveaux(loadedNiveaux);
+        setEnseignants(loadedEnseignants);
+      } catch (error) {
+        Swal.fire("Erreur", unwrapError(error, "Chargement impossible"), "error");
+      }
+    }
+
+    void loadReferences();
+  }, [isOpen]);
+
+  async function handleSave() {
+    try {
+      setSaving(true);
+      await createMatiere({
+        matiere: matiere.trim(),
+        id_enseignant: Number(prof),
+        id_niveau: Number(niveau),
+      });
+      await Swal.fire("Succes", "Matiere ajoutee", "success");
+      setMatiere("");
+      setProf("");
+      onSaved();
+      onClose();
     } catch (error) {
-      console.error("Erreur lors de la récupération des enseignants:", error);
+      Swal.fire("Erreur", unwrapError(error, "Creation impossible"), "error");
+    } finally {
+      setSaving(false);
     }
   }
 
-  const fetchNiveaux = async () => {
-    try {
-      const response = await axios.get(`${process.env.NEXT_PUBLIC_BACK_URL}/api/niveaux`);
-      console.log("Niveaux reçus :", response.data);
-      setNiveaux(response.data);
-    } catch (error) {
-      console.error("Erreur lors de la récupération des niveaux", error);
-    }
-  };
-
-  const handleNiveauChange = async (event: { target: { value: any } }) => {
-    const selectedValue = event.target.value;
-
-    if (selectedValue !== "none") {
-      setSelectedNiveau(selectedValue);
-    }
-  };
-  const handlematiereChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    setMatiere(event.target.value);
-  };
-
-  const handleprofChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
-    setProf(event.target.value);
-  };
-  
-  if (!isOpen) return null;
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-      <div className="bg-white rounded-lg p-6 w-full max-w-md sm:max-w-lg md:max-w-xl">
-        <h3 className="text-2xl font-bold mb-4">Nouvelle matiere</h3>
-        <div>
-          <form className=" rounded-lg ">
-            <div className="mb-4">
-              <label
-                htmlFor="matiere"
-                className="block text-sm font-medium text-gray-900"
-              >
-                Matiere
-              </label>
-              <input
-                type="text"
-                id="matiere"
-                name="matiere"
-                value={matiere}
-                onChange={handlematiereChange}
-                className="block w-full p-2 border border-gray-300 rounded-lg"
-                placeholder="Entrer le libelle"
-              />
-            </div>
-            <div className="mb-4">
-              <label
-                htmlFor="prof"
-                className="block text-sm font-medium text-gray-900"
-              >
-                Professeur responsable
-              </label>
-              <select
-                className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5"
-                onChange={handleprofChange}
-              >
-                <option value="none">Choisir un prof</option>
-                {enseignants.map((enseignant) => (
-                  <option
-                    key={enseignant.id_enseignant}
-                    value={enseignant.id_enseignant}
-                  >
-                    {enseignant.nom_enseignant} {enseignant.prenom_enseignant}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="mb-4">
-              <label
-                htmlFor="prof"
-                className="block text-sm font-medium text-gray-900"
-              >
-                Niveau
-              </label>
-              <select
-                id="niveaux"
-                className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5"
-                onChange={handleNiveauChange}
-                value={selectedNiveau}
-              >
-                <option value="none">Choisir un niveau</option>
-                {niveaux.map((niveau, index) => (
-                  <option key={niveau.id_niveau} value={niveau.id_niveau}>
-                    {niveau.niveau}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </form>
-        </div>
-        <div className="flex mt-4 gap-3">
+    <ModalShell
+      isOpen={isOpen}
+      title="Nouvelle matiere"
+      footer={
+        <>
           <button
             onClick={onClose}
-            className=" inline-block px-8 py-4 bg-gradient-to-r from-gray-800 to-gray-900 text-white rounded-lg shadow-lg hover:bg-gray-700 transition-all duration-300"
+            className="rounded-2xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white"
           >
-            Close
+            Fermer
           </button>
           <button
-            onClick={handleEnregistrer}
-            type="button"
-            className=" inline-block px-8 py-4 bg-gradient-to-r from-teal-300 to-lime-300 text-black rounded-lg shadow-lg hover:bg-gradient-to-l hover:from-teal-400 hover:to-lime-400 transition-all duration-300"
-
+            onClick={() => void handleSave()}
+            disabled={saving || !matiere.trim() || !prof || !niveau}
+            className="rounded-2xl bg-teal-600 px-5 py-3 text-sm font-semibold text-white disabled:opacity-50"
           >
-            Enregistrer
+            {saving ? "Enregistrement..." : "Enregistrer"}
           </button>
-        </div>
+        </>
+      }
+    >
+      <div className="grid gap-4">
+        <label className="grid gap-2 text-sm font-medium text-slate-700">
+          Libelle
+          <input
+            type="text"
+            value={matiere}
+            onChange={(event) => setMatiere(event.target.value)}
+            className="rounded-2xl border border-slate-200 px-4 py-3 outline-none focus:border-teal-500"
+          />
+        </label>
+        <label className="grid gap-2 text-sm font-medium text-slate-700">
+          Enseignant
+          <select
+            value={prof}
+            onChange={(event) => setProf(event.target.value)}
+            className="rounded-2xl border border-slate-200 px-4 py-3 outline-none focus:border-teal-500"
+          >
+            <option value="">Choisir un enseignant</option>
+            {enseignants.map((enseignant) => (
+              <option key={enseignant.id_enseignant} value={enseignant.id_enseignant}>
+                {enseignant.nom_enseignant} {enseignant.prenom_enseignant}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="grid gap-2 text-sm font-medium text-slate-700">
+          Niveau
+          <select
+            value={niveau}
+            onChange={(event) => setNiveau(event.target.value)}
+            className="rounded-2xl border border-slate-200 px-4 py-3 outline-none focus:border-teal-500"
+          >
+            <option value="">Choisir un niveau</option>
+            {niveaux.map((item) => (
+              <option key={item.id_niveau} value={item.id_niveau}>
+                {item.niveau}
+              </option>
+            ))}
+          </select>
+        </label>
       </div>
-    </div>
+    </ModalShell>
   );
-};
-export default AjoutModal;
+}
